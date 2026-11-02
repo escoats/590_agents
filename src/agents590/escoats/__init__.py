@@ -121,16 +121,19 @@ class EscoatsAgent:
 
     def run_shell_command(self, command: str, context: RunContext) -> str:
         """Run a shell command and return its output."""
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=context.cwd,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=context.cwd,
+                check=False,
+            )
+            return json.dumps(
+                {"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+            )
 
-        return json.dumps(
-            {"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
-        )
+        except (OSError, UnicodeError) as error:
+            return json.dumps({"error": str(error)})
