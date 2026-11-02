@@ -1,13 +1,16 @@
 """The course starter agent, independent of Harbor."""
 
 import json
+import os
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from openai import AsyncOpenAI
 from openai.types.responses import FunctionToolParam
 
 from agents590.contracts import RunContext
+from agents590.escoats.atif import AtifRecorder
 from agents590.provider import UNCOpenAISettings
 
 
@@ -15,42 +18,6 @@ class EscoatsAgent:
     """Scaffold for a model/tool loop using the shared standalone interface."""
 
     tools: list[FunctionToolParam] = [
-        {
-            "type": "function",
-            "name": "read_file",
-            "description": "Read a file",
-            "strict": False,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {
-                        "type": "string",
-                        "description": "Name of the file to be read",
-                    },
-                },
-                "required": ["filename"],
-            },
-        },
-        {
-            "type": "function",
-            "name": "write_file",
-            "description": "Write to a file.",
-            "strict": False,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {
-                        "type": "string",
-                        "description": "Name of the file to be written to",
-                    },
-                    "contents": {
-                        "type": "string",
-                        "description": "Text to write to the file",
-                    },
-                },
-                "required": ["filename", "contents"],
-            },
-        },
         {
             "type": "function",
             "name": "run_shell_command",
@@ -76,6 +43,14 @@ class EscoatsAgent:
     async def run(self, instruction: str, context: RunContext) -> str:
         settings = self.provider_settings(context)
         client: AsyncOpenAI = settings.create_async_client()
+        atif_path = os.environ.get("AGENTS590_ATIF_PATH")
+        recorder = (
+            AtifRecorder(
+                Path(atif_path), instruction=instruction, model=settings.model, tools=self.tools
+            )
+            if atif_path
+            else None
+        )
 
         input_list: list[Any] = [
             {
@@ -97,15 +72,21 @@ class EscoatsAgent:
             tool_calls = [item for item in response.output if item.type == "function_call"]
 
             if not tool_calls:
+                if recorder is not None:
+                    recorder.record_response(response, [])
                 break
 
+            tool_results: list[tuple[str, str]] = []
             for item in tool_calls:
                 name = item.name
                 args = json.loads(item.arguments)
                 result = self.call_function(name, args, context)
+                tool_results.append((item.call_id, result))
                 input_list.append(
                     {"type": "function_call_output", "call_id": item.call_id, "output": result}
                 )
+            if recorder is not None:
+                recorder.record_response(response, tool_results)
 
         return response.output_text
 
