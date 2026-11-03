@@ -83,11 +83,33 @@ make check  # Ruff lint/format and Pyright static type checking
 make test   # pytest, with no live model requests
 ```
 
+### Dev container
+
+With Docker and the VS Code Dev Containers extension installed, open this
+repository in VS Code and run **Dev Containers: Reopen in Container**. The image
+contains Python 3.12 and a pinned `uv`; it runs `uv sync --locked` after creation.
+The Linux virtual environment lives at `/opt/venv`, separate from the host's
+`.venv`.
+
+Inside the container, use the same commands as on the host:
+
+```sh
+uv run agents590 --list
+uv run agents590 krisj_echo -i "Hello from the container"
+make check
+make test
+```
+
+The repository is bind-mounted into the container, so source changes persist on
+the host. A local `.env` is available through that mount but is excluded from the
+image build context; do not commit it. Model requests remain opt-in.
+
 VS Code recommends Python, Pylance, and Ruff. Pylance and the Pyright CLI share
-the strict `[tool.pyright]` configuration in `pyproject.toml`; VS Code uses
-`.venv/bin/python`. Python source is annotated and the distribution includes
-`py.typed`. `make clean` removes generated caches and build output while keeping
-the virtual environment and `.env`.
+the strict `[tool.pyright]` configuration in `pyproject.toml`; VS Code uses the
+host's `.venv/bin/python` or `/opt/venv/bin/python` in the dev container. Python
+source is annotated and the distribution includes `py.typed`. `make clean`
+removes generated caches and build output while keeping the virtual environment
+and `.env`.
 
 ## Evaluate through Harbor
 
